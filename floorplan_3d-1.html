@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Autonomous Structural Intelligence System — 3D Floor Plan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap');
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0c10;
+    --panel: #10141c;
+    --border: #1e2530;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --text: #e8eaf0;
+    --muted: #5a6070;
+    --success: #00e5a0;
+    --warn: #ffd166;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #canvas-container {
+    position: absolute; inset: 0;
+  }
+
+  /* TOP BAR */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 56px;
+    background: rgba(10,12,16,0.92);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px;
+    gap: 20px; z-index: 10;
+    backdrop-filter: blur(12px);
+  }
+  #topbar .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 15px;
+    letter-spacing: -0.5px;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 8px;
+  }
+  #topbar .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.5)} }
+  #topbar .sep { width: 1px; height: 28px; background: var(--border); }
+  #topbar .plan-tabs { display: flex; gap: 6px; }
+  .plan-tab {
+    padding: 5px 14px; border-radius: 4px; font-size: 11px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; color: var(--muted);
+    font-family: 'Space Mono', monospace; transition: all .2s;
+  }
+  .plan-tab.active, .plan-tab:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+  #topbar .status {
+    margin-left: auto; font-size: 11px; color: var(--success);
+    display: flex; align-items: center; gap: 6px;
+  }
+  #topbar .status::before { content:''; width:6px;height:6px;border-radius:50%;background:var(--success); animation:pulse 1.5s infinite; }
+
+  /* SIDE PANEL */
+  #side-panel {
+    position: absolute; left: 0; top: 56px; bottom: 0;
+    width: 260px;
+    background: rgba(16,20,28,0.95);
+    border-right: 1px solid var(--border);
+    z-index: 10; padding: 16px;
+    overflow-y: auto;
+    backdrop-filter: blur(8px);
+  }
+  .panel-section { margin-bottom: 20px; }
+  .panel-label {
+    font-size: 9px; letter-spacing: 2px; color: var(--muted);
+    text-transform: uppercase; margin-bottom: 10px;
+    padding-bottom: 6px; border-bottom: 1px solid var(--border);
+  }
+
+  /* LEGEND */
+  .legend-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 0; font-size: 11px; color: var(--text);
+  }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+  /* MATERIAL CARDS */
+  .mat-card {
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px; margin-bottom: 8px;
+    transition: border-color .2s;
+  }
+  .mat-card:hover { border-color: var(--accent); }
+  .mat-card .mat-name { font-size: 12px; color: var(--accent); font-weight: 700; }
+  .mat-card .mat-type { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+  .mat-bar-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .mat-bar-label { font-size: 9px; color: var(--muted); width: 50px; }
+  .mat-bar { height: 4px; border-radius: 2px; flex: 1; background: var(--border); overflow: hidden; }
+  .mat-bar-fill { height: 100%; border-radius: 2px; }
+
+  /* STATS */
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-val { color: var(--accent); font-weight: 700; }
+
+  /* CONTROLS HINT */
+  #controls-hint {
+    position: absolute; bottom: 16px; right: 16px;
+    background: rgba(16,20,28,0.9);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; font-size: 10px; color: var(--muted);
+    z-index: 10; backdrop-filter: blur(8px);
+    line-height: 2;
+  }
+  #controls-hint span { color: var(--text); }
+
+  /* MATERIAL PANEL BOTTOM */
+  #mat-panel {
+    position: absolute; bottom: 0; left: 260px; right: 0;
+    height: 130px;
+    background: rgba(10,12,16,0.95);
+    border-top: 1px solid var(--border);
+    z-index: 10; backdrop-filter: blur(8px);
+    padding: 12px 20px; display: flex; gap: 12px; overflow-x: auto;
+  }
+  .mat-chip {
+    flex-shrink: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; min-width: 150px;
+  }
+  .mat-chip .ch-name { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 2px; }
+  .mat-chip .ch-use { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+  .mat-chip .score-row { display: flex; align-items: center; justify-content: space-between; font-size: 10px; }
+  .score-badge { padding: 2px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .score-high { background: rgba(0,229,160,.15); color: var(--success); }
+  .score-med { background: rgba(255,209,102,.15); color: var(--warn); }
+  .mat-panel-title {
+    writing-mode: vertical-rl; text-orientation: mixed;
+    font-size: 9px; letter-spacing: 2px; color: var(--muted);
+    text-transform: uppercase; margin-right: 4px;
+  }
+
+  #canvas-container canvas { display: block; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo"><div class="dot"></div>StructureAI · 3D Engine</div>
+  <div class="sep"></div>
+  <div class="plan-tabs">
+    <button class="plan-tab" onclick="loadPlan('A')">Plan A · 2BR</button>
+    <button class="plan-tab active" onclick="loadPlan('B')">Plan B · 4BR</button>
+    <button class="plan-tab" onclick="loadPlan('C')">Plan C · L-Shape</button>
+  </div>
+  <div class="status">PIPELINE ACTIVE — All 5 Stages Complete</div>
+</div>
+
+<!-- SIDE PANEL -->
+<div id="side-panel">
+
+  <div class="panel-section">
+    <div class="panel-label">Room Legend</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#1a4a6b"></div>Bedroom</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#1a4a2a"></div>Living / Great Room</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#4a3a1a"></div>Kitchen</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#2a1a4a"></div>Bathroom</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#1a3a4a"></div>Laundry</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#3a3a1a"></div>Foyer / Entry</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#6e5634;border:1px solid #8b6914"></div>Door Opening</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#1e6fa0;border:1px solid #00d4ff"></div>Window</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#e8dcc8;border:1px solid #ccc"></div>Load-Bearing Wall</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#b0a898;border:1px solid #999"></div>Partition Wall</div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Structure Stats</div>
+    <div class="stat-row"><span>Total Floor Area</span><span class="stat-val">187.4 m²</span></div>
+    <div class="stat-row"><span>Wall Height</span><span class="stat-val">3.0 m</span></div>
+    <div class="stat-row"><span>Load-Bearing Walls</span><span class="stat-val">8</span></div>
+    <div class="stat-row"><span>Partition Walls</span><span class="stat-val">11</span></div>
+    <div class="stat-row"><span>Door Openings</span><span class="stat-val">9</span></div>
+    <div class="stat-row"><span>Windows</span><span class="stat-val">12</span></div>
+    <div class="stat-row"><span>Max Span</span><span class="stat-val">5.8 m</span></div>
+    <div class="stat-row"><span>Est. Material Cost</span><span class="stat-val">₹12.4L</span></div>
+  </div>
+
+  <div class="panel-section">
+    <div class="panel-label">Top Material Picks</div>
+
+    <div class="mat-card">
+      <div class="mat-name">RCC</div>
+      <div class="mat-type">Columns · Slabs · Long Spans</div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Cost</div><div class="mat-bar"><div class="mat-bar-fill" style="width:85%;background:#ff6b35"></div></div></div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Strength</div><div class="mat-bar"><div class="mat-bar-fill" style="width:98%;background:#00e5a0"></div></div></div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Durability</div><div class="mat-bar"><div class="mat-bar-fill" style="width:98%;background:#00d4ff"></div></div></div>
+    </div>
+
+    <div class="mat-card">
+      <div class="mat-name">Red Brick</div>
+      <div class="mat-type">Load-Bearing Walls</div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Cost</div><div class="mat-bar"><div class="mat-bar-fill" style="width:55%;background:#ff6b35"></div></div></div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Strength</div><div class="mat-bar"><div class="mat-bar-fill" style="width:78%;background:#00e5a0"></div></div></div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Durability</div><div class="mat-bar"><div class="mat-bar-fill" style="width:60%;background:#00d4ff"></div></div></div>
+    </div>
+
+    <div class="mat-card">
+      <div class="mat-name">AAC Blocks</div>
+      <div class="mat-type">Partition Walls</div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Cost</div><div class="mat-bar"><div class="mat-bar-fill" style="width:30%;background:#ff6b35"></div></div></div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Strength</div><div class="mat-bar"><div class="mat-bar-fill" style="width:55%;background:#00e5a0"></div></div></div>
+      <div class="mat-bar-row"><div class="mat-bar-label">Durability</div><div class="mat-bar"><div class="mat-bar-fill" style="width:82%;background:#00d4ff"></div></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 3D CANVAS -->
+<div id="canvas-container"></div>
+
+<!-- CONTROLS HINT -->
+<div id="controls-hint">
+  <span>Left drag</span> — Rotate &nbsp;|&nbsp;
+  <span>Right drag</span> — Pan<br>
+  <span>Scroll</span> — Zoom &nbsp;|&nbsp;
+  <span>Double-click</span> — Reset
+</div>
+
+<!-- MATERIAL PANEL -->
+<div id="mat-panel">
+  <div class="mat-panel-title">Material Analysis</div>
+
+  <div class="mat-chip">
+    <div class="ch-name">RCC</div>
+    <div class="ch-use">Columns · Slab</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-high">9.2 / 10</span></div>
+  </div>
+  <div class="mat-chip">
+    <div class="ch-name">Red Brick</div>
+    <div class="ch-use">Load-Bearing Walls</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-high">8.1 / 10</span></div>
+  </div>
+  <div class="mat-chip">
+    <div class="ch-name">AAC Blocks</div>
+    <div class="ch-use">Partition Walls</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-high">7.8 / 10</span></div>
+  </div>
+  <div class="mat-chip">
+    <div class="ch-name">Steel Frame</div>
+    <div class="ch-use">5.8m Span Support</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-med">7.0 / 10</span></div>
+  </div>
+  <div class="mat-chip">
+    <div class="ch-name">Fly Ash Brick</div>
+    <div class="ch-use">Non-Structural Walls</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-med">6.5 / 10</span></div>
+  </div>
+  <div class="mat-chip">
+    <div class="ch-name">Precast Panel</div>
+    <div class="ch-use">Structural Walls / Slabs</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-high">8.4 / 10</span></div>
+  </div>
+  <div class="mat-chip">
+    <div class="ch-name">Hollow Block</div>
+    <div class="ch-use">Non-Structural</div>
+    <div class="score-row">Tradeoff Score <span class="score-badge score-med">5.9 / 10</span></div>
+  </div>
+</div>
+
+<!-- THREE.JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// FLOOR PLAN DATA — Plan A, B, C
+// Each room: {name, x, z, w, d, type}
+// Each wall: {x1,z1,x2,z2,loadBearing}
+// Doors: {x,z,rot}  Windows: {x,z,rot}
+// ============================================================
+
+const PLANS = {
+  A: {
+    rooms: [
+      {name:'Living Room',   x:-5,  z:-3,  w:5,   d:5,   type:'living'},
+      {name:'Bedroom 1',     x:1,   z:-3,  w:4,   d:5,   type:'bedroom'},
+      {name:'Bedroom 2',     x:-5,  z:2.5, w:4,   d:4,   type:'bedroom'},
+      {name:'Kitchen',       x:0,   z:2.5, w:3,   d:4,   type:'kitchen'},
+      {name:'Bathroom',      x:3.5, z:2.5, w:2.5, d:4,   type:'bathroom'},
+    ],
+    wallThick: 0.22,
+    wallH: 3,
+    doors: [
+      {x:-5,z:-0.5,rot:0},{x:1,z:-0.5,rot:0},{x:-3,z:2.5,rot:Math.PI/2},
+      {x:0.5,z:2.5,rot:Math.PI/2},{x:3.5,z:2.5,rot:Math.PI/2}
+    ],
+    windows: [
+      {x:-7.5,z:-3,rot:Math.PI/2},{x:-7.5,z:-1,rot:Math.PI/2},
+      {x:3,z:-5.5,rot:0},{x:-2,z:-5.5,rot:0},
+      {x:5.5,z:0,rot:Math.PI/2},{x:6.5,z:3,rot:Math.PI/2}
+    ],
+  },
+  B: {
+    rooms: [
+      {name:'Great Room',  x:-7,  z:-5,  w:6,   d:5,   type:'living'},
+      {name:'Kitchen',     x:-0.5,z:-5,  w:4,   d:3,   type:'kitchen'},
+      {name:'Bedroom 1',   x:4,   z:-5,  w:4,   d:4,   type:'bedroom'},
+      {name:'Bedroom 2',   x:4,   z:-0.5,w:4,   d:4.5, type:'bedroom'},
+      {name:'Bedroom 3',   x:-1,  z:0.5, w:4,   d:4,   type:'bedroom'},
+      {name:'Bedroom 4',   x:-7,  z:0.5, w:5,   d:4,   type:'bedroom'},
+      {name:'Bath 1',      x:3.5, z:-1,  w:3,   d:3,   type:'bathroom'},
+      {name:'Bath 2',      x:-0.5,z:-1.5,w:2.5, d:2.5, type:'bathroom'},
+      {name:'Bath 3',      x:-7,  z:5,   w:3,   d:2.5, type:'bathroom'},
+      {name:'Laundry',     x:-3.5,z:5,   w:3,   d:2.5, type:'laundry'},
+      {name:'Foyer',       x:-0.5,z:3,   w:3,   d:3.5, type:'foyer'},
+    ],
+    wallThick: 0.25,
+    wallH: 3,
+    doors: [
+      {x:-7,z:-2.5,rot:Math.PI/2},{x:2,z:-5,rot:0},{x:4,z:-2.5,rot:Math.PI/2},
+      {x:1.5,z:-0.5,rot:0},{x:4,z:2,rot:Math.PI/2},{x:-3.5,z:0.5,rot:0},
+      {x:-7,z:3,rot:Math.PI/2},{x:-0.5,z:5.5,rot:0},{x:1,z:3,rot:Math.PI/2}
+    ],
+    windows: [
+      {x:-10,z:-4,rot:Math.PI/2},{x:-10,z:-2,rot:Math.PI/2},{x:-10,z:1,rot:Math.PI/2},
+      {x:-10,z:3.5,rot:Math.PI/2},{x:-5,z:-7.5,rot:0},{x:0,z:-7.5,rot:0},
+      {x:4,z:-7.5,rot:0},{x:8.5,z:-4,rot:Math.PI/2},{x:8.5,z:0,rot:Math.PI/2},
+      {x:8.5,z:3,rot:Math.PI/2},{x:-2,z:8,rot:0},{x:2,z:8,rot:0}
+    ],
+  },
+  C: {
+    rooms: [
+      {name:'Living Room', x:-6,  z:-3,  w:6,   d:5,   type:'living'},
+      {name:'Dining',      x:1,   z:-5,  w:4,   d:3,   type:'kitchen'},
+      {name:'Bedroom 1',   x:1,   z:-1,  w:4,   d:5,   type:'bedroom'},
+      {name:'Bedroom 2',   x:-6,  z:3,   w:4,   d:4,   type:'bedroom'},
+      {name:'Bedroom 3',   x:-1,  z:3,   w:4,   d:4,   type:'bedroom'},
+      {name:'Bath 1',      x:-6,  z:-2,  w:3,   d:3,   type:'bathroom'},
+      {name:'Bath 2',      x:5,   z:0,   w:2.5, d:3,   type:'bathroom'},
+      {name:'Entry',       x:-2,  z:-1,  w:3,   d:3,   type:'foyer'},
+    ],
+    wallThick: 0.22,
+    wallH: 3,
+    doors: [
+      {x:-6,z:-0.5,rot:Math.PI/2},{x:1,z:-0.5,rot:Math.PI/2},{x:-3,z:3,rot:0},
+      {x:1,z:3,rot:0},{x:-4,z:-3,rot:0},{x:3,z:-1,rot:Math.PI/2}
+    ],
+    windows: [
+      {x:-9.5,z:-2,rot:Math.PI/2},{x:-9.5,z:4,rot:Math.PI/2},{x:-4,z:-7.5,rot:0},
+      {x:3,z:-7.5,rot:0},{x:5,z:-7.5,rot:0},{x:8,z:-2,rot:Math.PI/2},
+      {x:3,z:7.5,rot:0},{x:-1,z:7.5,rot:0}
+    ],
+  }
+};
+
+// ============================================================
+// THREE.JS SETUP
+// ============================================================
+const container = document.getElementById('canvas-container');
+const W = () => container.clientWidth;
+const H = () => container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0c10);
+scene.fog = new THREE.Fog(0x0a0c10, 40, 80);
+
+const camera = new THREE.PerspectiveCamera(50, W()/H(), 0.1, 200);
+camera.position.set(0, 22, 22);
+camera.lookAt(0, 0, 0);
+
+// LIGHTS
+const ambient = new THREE.AmbientLight(0x4488ff, 0.4);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xfff0e0, 1.8);
+sun.position.set(15, 30, 20);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+sun.shadow.camera.near = 0.5;
+sun.shadow.camera.far = 100;
+sun.shadow.camera.left = -30;
+sun.shadow.camera.right = 30;
+sun.shadow.camera.top = 30;
+sun.shadow.camera.bottom = -30;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0x88aaff, 0.6);
+fill.position.set(-10, 10, -10);
+scene.add(fill);
+
+const rim = new THREE.PointLight(0x00d4ff, 0.8, 60);
+rim.position.set(-15, 8, -15);
+scene.add(rim);
+
+// GROUND GRID
+const gridHelper = new THREE.GridHelper(60, 60, 0x1e2530, 0x141820);
+gridHelper.position.y = -0.01;
+scene.add(gridHelper);
+
+// ============================================================
+// ORBIT CONTROLS (manual implementation)
+// ============================================================
+let isDragging = false, isRightDrag = false;
+let prevMouse = {x:0, y:0};
+let spherical = {theta: Math.PI/6, phi: Math.PI/4, r: 32};
+let target = new THREE.Vector3(0, 0, 0);
+
+function updateCamera() {
+  camera.position.x = target.x + spherical.r * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+  camera.position.y = target.y + spherical.r * Math.cos(spherical.phi);
+  camera.position.z = target.z + spherical.r * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+  camera.lookAt(target);
+}
+updateCamera();
+
+container.addEventListener('mousedown', e => {
+  isDragging = true;
+  isRightDrag = e.button === 2;
+  prevMouse = {x: e.clientX, y: e.clientY};
+  e.preventDefault();
+});
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+  prevMouse = {x: e.clientX, y: e.clientY};
+  if (isRightDrag) {
+    const panSpeed = 0.02;
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3(0,1,0);
+    right.crossVectors(camera.position.clone().sub(target), up).normalize();
+    target.addScaledVector(right, -dx * panSpeed);
+    target.y += dy * panSpeed;
+  } else {
+    spherical.theta -= dx * 0.008;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI/2-0.05, spherical.phi + dy * 0.008));
+  }
+  updateCamera();
+});
+container.addEventListener('wheel', e => {
+  spherical.r = Math.max(5, Math.min(60, spherical.r + e.deltaY * 0.04));
+  updateCamera();
+}, {passive:true});
+container.addEventListener('contextmenu', e => e.preventDefault());
+container.addEventListener('dblclick', () => {
+  spherical = {theta:Math.PI/6, phi:Math.PI/4, r:32};
+  target.set(0,0,0);
+  updateCamera();
+});
+
+// ============================================================
+// ROOM COLORS
+// ============================================================
+const ROOM_COLORS = {
+  bedroom:  { floor: 0x1a3a5c, ceiling: 0x1a2a40, emissive: 0x0a1a30, name: '#4da6ff' },
+  living:   { floor: 0x1a4a2a, ceiling: 0x142a1a, emissive: 0x0a1a0a, name: '#4dff88' },
+  kitchen:  { floor: 0x4a3a1a, ceiling: 0x2a2010, emissive: 0x1a1008, name: '#ffb347' },
+  bathroom: { floor: 0x2a1a4a, ceiling: 0x1a1030, emissive: 0x0a0820, name: '#b47aff' },
+  laundry:  { floor: 0x1a3a4a, ceiling: 0x102030, emissive: 0x081018, name: '#47d4ff' },
+  foyer:    { floor: 0x3a3a1a, ceiling: 0x202010, emissive: 0x101008, name: '#ffe047' },
+};
+
+// MATERIALS
+const wallMatLoad = new THREE.MeshStandardMaterial({
+  color: 0xd4c8b0, roughness: 0.85, metalness: 0.0
+});
+const wallMatPartition = new THREE.MeshStandardMaterial({
+  color: 0xa89888, roughness: 0.9, metalness: 0.0
+});
+const doorMat = new THREE.MeshStandardMaterial({
+  color: 0x6e4a20, roughness: 0.7, metalness: 0.1
+});
+const doorFrameMat = new THREE.MeshStandardMaterial({
+  color: 0x4a3010, roughness: 0.6, metalness: 0.2
+});
+const windowMat = new THREE.MeshStandardMaterial({
+  color: 0x1e6fa0, roughness: 0.1, metalness: 0.1,
+  transparent: true, opacity: 0.55,
+  envMapIntensity: 1
+});
+const windowFrameMat = new THREE.MeshStandardMaterial({
+  color: 0x808080, roughness: 0.5, metalness: 0.4
+});
+const columnMat = new THREE.MeshStandardMaterial({
+  color: 0xc8b898, roughness: 0.6, metalness: 0.05
+});
+
+// ============================================================
+// BUILD SCENE FROM PLAN DATA
+// ============================================================
+let currentGroup = null;
+let labelElements = [];
+
+function clearLabels() {
+  labelElements.forEach(el => el.remove());
+  labelElements = [];
+}
+
+function buildPlan(planKey) {
+  if (currentGroup) { scene.remove(currentGroup); }
+  clearLabels();
+
+  const plan = PLANS[planKey];
+  const group = new THREE.Group();
+  currentGroup = group;
+  scene.add(group);
+
+  const wT = plan.wallThick;
+  const wH = plan.wallH;
+
+  // ── FLOOR SLAB (base) ──
+  const allX = plan.rooms.flatMap(r => [r.x - r.w/2, r.x + r.w/2]);
+  const allZ = plan.rooms.flatMap(r => [r.z - r.d/2, r.z + r.d/2]);
+  const minX = Math.min(...allX) - 0.5;
+  const maxX = Math.max(...allX) + 0.5;
+  const minZ = Math.min(...allZ) - 0.5;
+  const maxZ = Math.max(...allZ) + 0.5;
+  const slabGeo = new THREE.BoxGeometry(maxX-minX, 0.12, maxZ-minZ);
+  const slabMat = new THREE.MeshStandardMaterial({color:0x1a1810, roughness:0.9});
+  const slab = new THREE.Mesh(slabGeo, slabMat);
+  slab.position.set((minX+maxX)/2, -0.06, (minZ+maxZ)/2);
+  slab.receiveShadow = true;
+  group.add(slab);
+
+  // ── ROOMS (floors + ceilings + walls) ──
+  plan.rooms.forEach(room => {
+    const rc = ROOM_COLORS[room.type] || ROOM_COLORS.foyer;
+
+    // Floor
+    const floorGeo = new THREE.BoxGeometry(room.w - wT, 0.08, room.d - wT);
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: rc.floor, roughness: 0.85, metalness: 0.05,
+      emissive: new THREE.Color(rc.emissive), emissiveIntensity: 0.3
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.position.set(room.x, 0.04, room.z);
+    floor.receiveShadow = true;
+    group.add(floor);
+
+    // Ceiling (semi-transparent)
+    const ceilGeo = new THREE.BoxGeometry(room.w - wT*2, 0.06, room.d - wT*2);
+    const ceilMat = new THREE.MeshStandardMaterial({
+      color: rc.ceiling, roughness: 0.9, transparent: true, opacity: 0.5
+    });
+    const ceil = new THREE.Mesh(ceilGeo, ceilMat);
+    ceil.position.set(room.x, wH - 0.03, room.z);
+    group.add(ceil);
+
+    // Room label
+    addLabel(room.name, room.x, wH * 0.5, room.z, rc.name);
+  });
+
+  // ── WALLS ──
+  // Build outer walls from rooms
+  plan.rooms.forEach((room, idx) => {
+    const isOuter = idx < 3; // simplified — outer rooms are load-bearing
+    const mat = isOuter ? wallMatLoad : wallMatPartition;
+    buildRoomWalls(group, room, wT, wH, mat);
+  });
+
+  // ── COLUMNS at corners ──
+  const colPositions = new Set();
+  plan.rooms.forEach(room => {
+    [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx,sz]) => {
+      const cx = room.x + sx*(room.w/2);
+      const cz = room.z + sz*(room.d/2);
+      const key = `${Math.round(cx*4)}_${Math.round(cz*4)}`;
+      if (!colPositions.has(key)) {
+        colPositions.add(key);
+        const colGeo = new THREE.BoxGeometry(wT+0.06, wH, wT+0.06);
+        const col = new THREE.Mesh(colGeo, columnMat);
+        col.position.set(cx, wH/2, cz);
+        col.castShadow = true;
+        group.add(col);
+      }
+    });
+  });
+
+  // ── DOORS ──
+  plan.doors.forEach(d => addDoor(group, d.x, d.z, d.rot, wH, wT));
+
+  // ── WINDOWS ──
+  plan.windows.forEach(w => addWindow(group, w.x, w.z, w.rot, wH, wT));
+}
+
+function buildRoomWalls(group, room, wT, wH, mat) {
+  const hw = room.w/2, hd = room.d/2;
+  // North wall
+  addWall(group, room.x, wH/2, room.z - hd, room.w, wH, wT, 0, mat);
+  // South wall
+  addWall(group, room.x, wH/2, room.z + hd, room.w, wH, wT, 0, mat);
+  // West wall
+  addWall(group, room.x - hw, wH/2, room.z, wT, wH, room.d, 0, mat);
+  // East wall
+  addWall(group, room.x + hw, wH/2, room.z, wT, wH, room.d, 0, mat);
+}
+
+function addWall(group, x, y, z, w, h, d, ry, mat) {
+  const geo = new THREE.BoxGeometry(w, h, d);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  mesh.rotation.y = ry;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+}
+
+function addDoor(group, x, z, rot, wH, wT) {
+  const dW = 0.9, dH = 2.1;
+  // Frame
+  const frameGeo = new THREE.BoxGeometry(dW + 0.1, dH + 0.1, wT + 0.05);
+  const frame = new THREE.Mesh(frameGeo, doorFrameMat);
+  frame.position.set(x, dH/2, z);
+  frame.rotation.y = rot;
+  frame.castShadow = true;
+  group.add(frame);
+  // Door panel
+  const doorGeo = new THREE.BoxGeometry(dW - 0.04, dH - 0.04, 0.05);
+  const door = new THREE.Mesh(doorGeo, doorMat);
+  door.position.set(x, dH/2, z);
+  door.rotation.y = rot;
+  door.castShadow = true;
+  group.add(door);
+  // Door knob
+  const knobGeo = new THREE.SphereGeometry(0.04, 8, 8);
+  const knobMat = new THREE.MeshStandardMaterial({color:0xd4a020, metalness:0.9, roughness:0.1});
+  const knob = new THREE.Mesh(knobGeo, knobMat);
+  knob.position.set(x + Math.cos(rot)*0.02, dH*0.5, z + Math.sin(rot)*0.02);
+  group.add(knob);
+  // Transom above door
+  const transomGeo = new THREE.BoxGeometry(dW, 0.4, 0.04);
+  const transomMat = new THREE.MeshStandardMaterial({color:0x1e6fa0, transparent:true, opacity:0.6, roughness:0.1});
+  const transom = new THREE.Mesh(transomGeo, transomMat);
+  transom.position.set(x, dH + 0.2, z);
+  transom.rotation.y = rot;
+  group.add(transom);
+}
+
+function addWindow(group, x, z, rot, wH, wT) {
+  const winW = 1.2, winH = 1.0, sillH = 0.9;
+  // Frame
+  const frameGeo = new THREE.BoxGeometry(winW + 0.1, winH + 0.1, wT + 0.04);
+  const frame = new THREE.Mesh(frameGeo, windowFrameMat);
+  frame.position.set(x, sillH + winH/2, z);
+  frame.rotation.y = rot;
+  group.add(frame);
+  // Glass
+  const glassGeo = new THREE.BoxGeometry(winW - 0.08, winH - 0.08, 0.04);
+  const glass = new THREE.Mesh(glassGeo, windowMat);
+  glass.position.set(x, sillH + winH/2, z);
+  glass.rotation.y = rot;
+  group.add(glass);
+  // Mullion (cross divider)
+  const mullH = new THREE.BoxGeometry(winW - 0.1, 0.04, 0.05);
+  const mullV = new THREE.BoxGeometry(0.04, winH - 0.1, 0.05);
+  const mullMat = new THREE.MeshStandardMaterial({color:0x606060, metalness:0.5, roughness:0.3});
+  const mH = new THREE.Mesh(mullH, mullMat);
+  const mV = new THREE.Mesh(mullV, mullMat);
+  mH.position.set(x, sillH + winH/2, z);
+  mH.rotation.y = rot;
+  mV.position.set(x, sillH + winH/2, z);
+  mV.rotation.y = rot;
+  group.add(mH, mV);
+}
+
+// ── HTML LABELS ──
+function addLabel(text, wx, wy, wz, color) {
+  const div = document.createElement('div');
+  div.style.cssText = `
+    position:absolute; pointer-events:none;
+    font-family:'Space Mono',monospace; font-size:10px; font-weight:700;
+    color:${color}; text-transform:uppercase; letter-spacing:1px;
+    text-shadow:0 0 8px ${color}88, 0 1px 3px #000;
+    white-space:nowrap; transform:translate(-50%,-50%);
+    background:rgba(10,12,16,0.6); padding:2px 6px; border-radius:3px;
+    border:1px solid ${color}44;
+  `;
+  div.textContent = text;
+  container.appendChild(div);
+  labelElements.push(div);
+  div._wx = wx; div._wy = wy; div._wz = wz;
+}
+
+function updateLabels() {
+  labelElements.forEach(div => {
+    const v = new THREE.Vector3(div._wx, div._wy, div._wz);
+    v.project(camera);
+    const x = (v.x * 0.5 + 0.5) * W();
+    const y = (-v.y * 0.5 + 0.5) * H();
+    if (v.z < 1) {
+      div.style.left = x + 'px';
+      div.style.top = y + 'px';
+      div.style.display = 'block';
+    } else {
+      div.style.display = 'none';
+    }
+  });
+}
+
+// ── PLAN SWITCH ──
+window.loadPlan = function(key) {
+  document.querySelectorAll('.plan-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  buildPlan(key);
+};
+
+// ── RESIZE ──
+window.addEventListener('resize', () => {
+  renderer.setSize(W(), H());
+  camera.aspect = W()/H();
+  camera.updateProjectionMatrix();
+});
+
+// ── INIT ──
+renderer.setSize(W(), H());
+buildPlan('B');
+
+// ── ANIMATE ──
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.005;
+  // Subtle rim light animation
+  rim.position.x = Math.sin(t) * 15;
+  rim.position.z = Math.cos(t) * 15;
+  renderer.render(scene, camera);
+  updateLabels();
+}
+animate();
+</script>
+</body>
+</html>
